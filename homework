@@ -1,0 +1,98 @@
+import telebot
+
+token = "5929364867:AAFYzJwy8TXBlRoadUrEro3euI7QQzXySNY"
+
+values = {
+
+    'доллар': 'USD',
+    'рубль': 'RUB',
+    'евро': 'EUR'
+}
+
+main_menu = '''Доступные команды:
+>>> /menu - Главное меню
+>>> /help - Помощь
+>>> /values - Доступные валюты'''
+
+help = '''Введите данные в формате:
+<имя валюты>пробел
+<в какую валюту перевести>пробел
+<количество переводимой валюты>
+ПРИМЕР:
+доллар рубль 100'''
+
+bot = telebot.TeleBot(token)
+
+@bot.message_handler(commands=['menu'])
+def main_menuu(message):
+    bot.send_message(message.chat.id, main_menu)
+
+@bot.message_handler(commands=['start'])
+def startt(message):
+    bot.send_message(message.chat.id, help + '\n /menu')
+
+@bot.message_handler(commands=['help'])
+def helpp(message):
+    bot.send_message(message.chat.id, help + '\n /menu')
+
+@bot.message_handler(commands=['values'])
+def valuess(message):
+    bot.send_message(message.chat.id, 'Доступные валюты:')
+    for i in values:
+        bot.send_message(message.chat.id, i + ' ' + values[i] )
+    bot.send_message(message.chat.id, '/menu')
+
+@bot.message_handler(content_types=['text'])
+def convert_result(message: telebot.types.Message):
+    try:
+        val = message.text.split(' ')
+
+        if len(val) != 3:
+            raise APIException('Слишком много или мало параметров')
+
+        base, quote, amount = val
+        result = CryptoConverter.convert(base, quote, amount)
+    except APIException as e:
+        bot.reply_to(message, f'Ошибка пользователя.\n {e}')
+    except Exception as e:
+        bot.reply_to(message, f'Не удалось обработать команду.\n {e}')
+    else:
+        text = f'{amount} {values[base]}({base}) в {values[quote]}({quote}) равно: {result}'
+        bot.send_message(message.chat.id, text)
+        bot.send_message(message.chat.id, "/menu")
+
+import requests
+import json
+
+
+class APIException(Exception):
+    pass
+
+class CryptoConverter:
+    @staticmethod
+    def convert(base: str, quote: str, amount: str):
+
+        if base == quote:
+            raise APIException(f'Нельзя конвертировать одинаковые валюты: {base}-{quote}')
+
+        try:
+            base_ticker = values[base]
+        except KeyError:
+            raise APIException(f'Не удалось обработать валюту {base}')
+
+        try:
+            quote_ticker = values[quote]
+        except KeyError:
+            raise APIException(f'Не удалось обработать валюту {quote}')
+
+        try:
+            amount = float(amount)
+        except ValueError:
+            raise APIException(f'Не удалось обработать количество {amount}')
+
+        r = requests.get(f'https://min-api.cryptocompare.com/data/price?fsym={base_ticker}&tsyms={quote_ticker}')
+        result = json.loads(r.content)[values[quote]]
+        result *= amount
+
+        return result
+bot.polling()
